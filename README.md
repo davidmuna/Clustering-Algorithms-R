@@ -1,7 +1,6 @@
 # Clustering-Algorithms-R
 ---
-title: "Unsupervised Learning in R"
-output: github_document
+"Unsupervised Learning in R"
 ---
 
 ```{r setup, include=FALSE}
