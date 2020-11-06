@@ -1,6 +1,6 @@
 # Clustering-Algorithms-R
 ---
-title: "Clustering E-Commerce Customers"
+title: "Unsupervised Learning in R"
 output: github_document
 ---
 
