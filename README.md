@@ -1,12 +1,12 @@
 # Clustering-Algorithms-R
 ---
-"Unsupervised Learning in R"
+
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-## Exploratory Data Analysis
+## Unsupervised Learning in R
 ```{r}
 A. Defining the Question
 
