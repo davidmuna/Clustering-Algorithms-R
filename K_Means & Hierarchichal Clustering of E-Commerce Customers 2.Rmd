@@ -1,0 +1,736 @@
+---
+title: "Clustering E-Commerce Customers"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Exploratory Data Analysis
+
+A. Defining the Question
+
+A Kenyan entrepreneur has created an online cryptography course and would want to advertise it on her blog. She currently targets audiences originating from various countries. In the past, she ran ads to advertise a related course on the same blog and collected data in the process. My task as a Data Science Consultant is to to help her by creating a model that predicts which individuals are most likely to click on her ads
+
+B. Metrics for Success
+                                  1. Plotting Clusters to visualise modelled clusters & noise points
+                                  2. Confusion Matrix to measure accuracy
+                                  
+C. Understanding the Context 
+
+It is imperative that all entrepreneurs identify all opportunities to advertise and boost their sales in whatever business they are engaged in. (See Problem Definition)
+
+D. Recording the Experimental Design
+                                  1.Problem Definition
+                                  2.Data Sourcing
+                                  3.Check the Data
+                                  4.Perform Data Cleaning
+                                  5.Perform Exploratory Data Analysis  (Univariate, Bivariate & Multivariate)
+                                  6.Implement the Solution using K-means & Hierarchical Clustering Algorithms
+                                  7.Challenge the Solution using DBSCAN Algorithm
+                                  8.Follow up Questions
+                                  
+## 1. Problem Definition
+
+Kira Plastinina ("https://kiraplastinina.ru/") is a Russian brand that is sold through a defunct chain of retail stores in Russia, Ukraine, Kazakhstan, Belarus, China, Philippines, and Armenia. The brand’s Sales and Marketing team would like to understand their customer’s behavior from data that they have collected over the past year. The objectives of this project are as follows:
+
+a. Learn the characteristics of customer groups
+
+b. Perform clustering stating insights drawn from analysis and visualizations.
+
+b. Upon implementation, provide comparisons between K-Means clustering vs Hierarchical clustering highlighting the strengths and limitations of each approach in the context of the analysis. 
+
+## 2. Data Sourcing
+
+The dataset for this project can be found here : "http://bit.ly/EcommerceCustomersDataset"
+
+## 3. Check the Data
+
+```{r}
+# Loading the necessary libraries using pacman
+
+pacman :: p_load(pacman, dplyr, tidyverse, GGally, ggplot2, ggthemes, ggvis, httr, lubridate,
+  plotly, rio, rmarkdown, shiny, stringr, tidyr, psych, corrplot, caret, Amelia, mice)
+```
+
+```{r}
+# Previewing first 10 records of our data
+
+data <- import("~/R/K_Means & Hierarchichal Clustering of E-Commerce Customers/online_shoppers_intention.csv")
+
+# converting data to a dataframe
+
+data <- as.data.frame(data) 
+head(data,10)
+```
+```{r}
+# Checking the size and shape of data
+dim(data)
+```
+```{r}
+# Viewing data types using str().
+
+str(data)
+```
+## 4. Perform Data Cleaning
+
+```{r}
+# Checking for missing data in our columns
+
+colSums(is.na(data))
+```
+The first 8 columns have 14 missing records. We'll drop the 14 missing observations since they're not many
+
+```{r}
+# Dropping missing observations, re-checking for missing records and checking new shape of data
+
+data <- na.omit(data)
+colSums(is.na(data))
+dim(data)
+```
+```{r}
+# Checking and dealing with duplicates by removing records that return TRUE 
+# for duplication and "returning visitors" 
+# This way, we'll only remove true duplicated records and not returning visitor records
+
+
+no_duplicates <- data[!(duplicated(data) & data$VisitorType != "Returning_Visitor"),]  
+dim(no_duplicates)  
+
+# There were only 5 true duplicated records
+```
+```{r}
+# Changing all column names to lowercase
+names(no_duplicates)[1:18] <- tolower(names(no_duplicates)[1:18])
+
+# Renaming columns with long names
+names(no_duplicates)[names(no_duplicates) == "administrative_duration"] <- "a_duration"
+names(no_duplicates)[names(no_duplicates) == "informational_duration"] <- "i_duration"
+names(no_duplicates)[names(no_duplicates) == "productrelated_duration"] <- "p_duration"
+
+# new column names
+colnames(no_duplicates)
+```
+
+```{r}
+# Converting integer columns to numeric
+
+no_duplicates$administrative   <- as.numeric(no_duplicates$administrative)
+no_duplicates$a_duration      <- as.numeric(no_duplicates$a_duration)
+
+no_duplicates$informational   <- as.numeric(no_duplicates$informational)
+no_duplicates$i_duration      <- as.numeric(no_duplicates$i_duration)
+
+no_duplicates$productrelated   <- as.numeric(no_duplicates$productrelated)
+no_duplicates$p_duration      <- as.numeric(no_duplicates$p_duration)
+
+no_duplicates$specialday      <- as.numeric(no_duplicates$specialday)
+
+no_duplicates$pagevalues      <- as.numeric(no_duplicates$pagevalues)
+```
+
+```{r}
+# Factorising categorical columns
+
+no_duplicates[,11:18] <- lapply(no_duplicates[,11:18], factor)  ## as.factor() could also be used
+```
+
+```{r}
+# checking final data types by using colnames() function and creating a for loop for each column name
+
+columns = colnames(no_duplicates)
+for (column in seq(length(colnames(no_duplicates)))){
+    print(columns[column])
+    print(class(no_duplicates[, column]))
+    cat('\n')
+} 
+```
+```{r}
+# Checking for Anomalies using levels() function
+# checking unique values in month
+levels(no_duplicates$month)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in opertaingsystems
+levels(no_duplicates$operatingsystems)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in browser
+levels(no_duplicates$browser)
+```
+
+```{r}
+# Checking Anomalies 
+# checking unique values in region
+levels(no_duplicates$region)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in traffictype
+levels(no_duplicates$traffictype)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in visitortype
+levels(no_duplicates$visitortype)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in weekend
+levels(no_duplicates$weekend)
+```
+```{r}
+# Checking Anomalies 
+# checking unique values in revenue
+levels(no_duplicates$revenue)
+```
+```{r}
+# Checking For Outliers in Numerical Columns
+
+# splitting numerical columns to half for better viewing of boxplots
+num_cols1 <- no_duplicates[,1:5]
+num_cols2 <- no_duplicates[,6:10]
+boxplot(num_cols1)
+```
+```{r}
+boxplot(num_cols2)
+```
+```{r}
+# From the boxplots, a_duration, i_duration, productrelated and p_duration have pronounced outliers
+
+# The values of these features are derived from the URL information of the pages visited by the user and updated in real-time when a user takes an action.Hence they are probably not outliers since the process is automated
+```
+
+
+```{r}
+# Checking for missing records
+final <- no_duplicates
+missmap(final)
+```
+
+## 5. Exploratory Data Analysis  (Univariate, Bivariate & Multivariate)
+
+# Univariate
+```{r} 
+# Frequency tables
+
+# Obtaining a table of product pages and time duration on each page
+
+time_on_prod_page <- final %>% 
+          group_by(productrelated) %>% summarise_at(vars(p_duration,bouncerates,exitrates),funs(sum(.,na.rm=TRUE)))
+
+time_on_prod_page
+```
+```{r} 
+# From the above table we can see that product page 1 has a very high bounce and exit rate
+# This is indicative that most users visit the page and subsequently exit immediately 
+# without visiting another page on the website or interacting with any of the elements on the page
+
+# Kira Plastinina should consider changing the product being displayed on product page 1 to one that
+# captures visitors' attention
+
+# i.e. Products with lowest bounce and exit rates should be displayed first
+```
+
+```{r}
+# Histogram of Product Related Pages
+
+# plotting using hist()
+hist(final$productrelated,
+        main = "Distribution of Product Related Pages",
+        xlab = "Types of Pages",
+        ylab = "Frequency")
+```
+```{r}
+# Product related pages are highly skewed to the right indicating the first page types are visited most frequently. It would be advisable for Kira Plastinina to place the most profitable or new products that capture visitors' attention on the first few pages to reduce bounce/exit rates thereby boosting awareness & sales
+```
+
+```{r}
+# Histogram of Administrative Pages
+
+# plotting using hist() 
+hist(final$administrative,
+        main = "Distribution of Administrative Pages",
+        xlab = "Types of Pages",
+        ylab = "Frequency")
+```
+```{r}
+# Administrative pages are highly skewed to the right indicating the first few page types are visited most frequently
+```
+
+```{r} 
+# Excluding records in data where a_duration is -1 value
+
+final <- final %>% filter(final$a_duration > 0)
+```
+
+
+```{r}
+# First line puts graphs into 4 columns with 2 rows
+par(mfrow=c(2,1))
+# par(mar=c(2,2,2,2))
+
+# Histograms of distribution of duration on administrative and product related pages 
+# and whether revenue was True
+
+hist(final$a_duration [final$revenue == TRUE],
+    main = "Duration on Administrative Pages (With Revenue)",
+    xlab = "Time on Site",
+    col = "blue")
+
+hist(final$a_duration [final$revenue == FALSE],
+    main = "Duration on Administrative Pages (No Revenue)",
+    xlab = "Time on Site",
+    col = "red")
+```
+```{r}
+# From above graphs, theres no significant chance in Revenue for persons who visit/linger on administrative pages
+```
+
+```{r}
+# First line puts graphs into 2 columns with 1 rows
+par(mfrow=c(2,1))
+# par(mar=c(2,2,2,2))
+
+# Histograms of distribution of duration on administrative and product related pages 
+# and whether revenue was False
+
+hist(final$p_duration [final$revenue == TRUE],
+    main = "Duration on Product Related Pages (With Revenue)",
+    xlab = "Time on Site",
+    col = "lightblue")
+
+hist(final$p_duration [final$revenue == FALSE],
+    main = "Duration on Product Related Pages (No Revenue)",
+    xlab = "Time on Site",
+    col = "pink")
+```
+```{r}
+# From above graphs, we can see the graphs are highly skewed to the right. We will need to normalise our dataset before feeding it to the clustering algorithms
+
+# However, visitors that visit more pages apart from the first product page end up giving our client revenue
+```
+
+```{r} 
+# Barplot of weekend
+
+# Giving colour
+library(RColorBrewer)
+coul <- brewer.pal(5, "Set2") 
+
+weekend <- table(final$weekend)
+
+# plotting using barplot()
+barplot(weekend,
+        col=coul,
+        main = "Count of Weekend Occurences")
+```
+```{r} 
+# The barplot above reveals that most customers dont access the web page during the weekend
+# judged by the occurrences of False in the weekend feature
+```
+
+```{r} 
+# Barplot of revenue
+
+# creating revenue table
+revenue <- table(final$revenue)
+
+# plotting using barplot()
+barplot(revenue,
+        col=coul,
+        main = "Count of Revenue Outcome")
+
+```
+```{r} 
+# There are more outcomes of False than True in Revenue. 
+# This indicates our data is imbalanced since Revenue is our class variable
+```
+
+```{r} 
+# Barplot of visitor type
+
+# creating visitortype table
+visitor <- table(final$visitortype)
+
+# plotting using barplot()
+barplot(visitor,
+        col=coul,
+        main = "Count of Visitor Type")
+
+```
+```{r} 
+# Majority of records have returning visitors, therefore, Kira Plastinina should focus on returning clients and aim to retain the new visitors. 
+```
+
+```{r} 
+# Measures of Central Tendency using summary()
+summary(final)
+```
+
+
+```{r} 
+# Getting some Measures of Dispersion using describe()
+describe(final)
+```
+```{r} 
+# Getting additional Measures of Dispersion for numerical variables
+
+num_vars <- final[,1:10] 
+
+# Skewness
+skew(num_vars)  
+
+# We can see all numerical columns are highly skewed hence not a normal distribution. 
+# We will have to normalise our dataset
+```
+```{r} 
+# computing the interquartile ranges for numerical variables
+
+administrative_iqr        <- IQR(num_vars$administrative)
+a_duration_iqr            <- IQR(num_vars$a_duration)
+informational_iqr         <- IQR(num_vars$informational)
+i_duration_iqr            <- IQR(num_vars$i_duration)
+productrelated_iqr        <- IQR(num_vars$productrelated)
+p_duration                <- IQR(num_vars$p_duration)
+bouncerates_iqr           <- IQR(num_vars$bouncerates)
+exitrates_iqr             <- IQR(num_vars$exitrates)
+pagevalues_iqr            <- IQR(num_vars$pagevalues)
+specialdaya_iqr           <- IQR(num_vars$specialday)
+
+
+print("administrative_iqr :",quote=TRUE) 
+administrative_iqr
+
+print("a_duration_iqr :",quote=TRUE)
+a_duration_iqr
+
+print("informational_iqr :",quote=TRUE) 
+informational_iqr
+
+print("i_duration_iqr :",quote=TRUE)
+i_duration_iqr
+
+print("productrelated_iqr :",quote=TRUE)
+productrelated_iqr
+
+print("p_duration :",quote=TRUE)
+p_duration 
+
+print("bouncerates_iqr :",quote=TRUE)
+bouncerates_iqr 
+
+print("exitrates_iqr :",quote=TRUE)
+exitrates_iqr 
+
+print("pagevalues_iqr :",quote=TRUE)
+pagevalues_iqr 
+
+print("specialdaya_iqr :",quote=TRUE)
+specialdaya_iqr 
+```
+```{r} 
+# Product related pages (p_duration) range is very high indicating people spend a lot of time on the site while others spend too little time on the site.
+```
+# Bivariate & Multivariate
+
+```{r} 
+# Correlations
+# Computing a correlation matrix between all numerical variables using pearson method and rounding off to 2 decimal places
+
+correlations <- cor(num_vars, method = "pearson")
+round(correlations, 2)
+```
+```{r} 
+
+# informational & i_duration, productrelated & p_duration, bouncerates & exitrates are strongly positively correlated by 
+# 0.61, 0.86 & 0.73 respectively.
+```
+
+```{r} 
+# Viewing the correlations better to support the above notions
+
+corrplot(correlations, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+```
+```{r}
+# Scatter Plots
+
+# Setting graph dimensions
+options(repr.plot.width = 13, repr.plot.height = 7)
+
+# Plotting using ggplot() and using theme() for theme of the plot 
+
+bouncexit_rates = ggplot(data = final, aes(x = bouncerates, y = exitrates , col = revenue)) + 
+    geom_point() + 
+    labs(title = 'Bouncerates Vs Exitrates by Revenue', x = 'Bounce Rate', y = 'Exit Rate') + 
+    scale_color_brewer(palette = 'Set2') +
+    theme(plot.title=element_text(size=18, face="bold", color="navyblue",hjust=0.5, lineheight=1.2), 
+          plot.subtitle=element_text(size=15, face="bold", hjust=0.5),
+         axis.title.x = element_text(color = 'navyblue', size = 13, face = 'bold', vjust = -0.5),
+         axis.title.y = element_text(color = 'navyblue', size = 13, face = 'bold', vjust = 0.5),
+         axis.text.y = element_text(size = 13),
+         axis.text.x = element_text(size = 13),
+         legend.title = element_text(size = 13, color = 'navyblue'),
+        legend.text = element_text(size = 11))
+        
+plot(bouncexit_rates)
+
+# There appears to be somekind of linear relationship between the two variables
+# When bouncerates and exitrates are lower on product related pages, there will be revenue as opposed to higher rates
+# Lower bouncerates and exitrates can also signify disinterest in the products on the page as well
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart with the count function for discrete variables such as the month in our dataset
+
+c <- ggplot(final, aes(x=month, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Revenue Distribution by Month")
+c + theme_bw()
+```
+```{r}
+# The months of Mar, May and November generate more activity hence more revenue. These months should be targeted to increase sales and profits
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart for weekend and revenue
+
+d <- ggplot(final, aes(x=weekend, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Revenue Distribution by Weekend")
+d + theme_bw()
+```
+```{r}
+# The weekend does not bring in much revenue since activity is higher during weekdays. Therefore weekdays should be targeted more.
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart for operating system and revenue
+
+e <- ggplot(final, aes(x=operatingsystems, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Operating System Against Revenue")
+e + theme_bw()
+```
+
+```{r}
+# Clients using the 1st, 2nd and 3rd operating systems are more active and bring in more revenue. These clients should be targeted in target marketing.
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart for visitor type and revenue
+
+e <- ggplot(final, aes(x=visitortype, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Visitor Type Against Revenue")
+e + theme_bw()
+```
+```{r}
+# Returning visitors should be targeted first followed by new visitors since they bring more revenue
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart for region and revenue
+
+e <- ggplot(final, aes(x=region, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Region Against Revenue")
+e + theme_bw()
+```
+```{r}
+# The first three regions can be target marketed for more returns since theyre more active 
+```
+
+```{r}
+# Combined Bar Charts
+
+# Using geom_bar to plot a combined bar chart for Traffic Type and revenue
+
+e <- ggplot(final, aes(x=traffictype, fill=revenue, color=revenue)) +
+geom_bar(binwidth = 1) + labs(title="Traffic Type Against Revenue")
+e + theme_bw()
+```
+```{r}
+# Traffic types 1 to 4 bring clients who are more active and generate more revenue, Especially traffic type 2. 
+```
+## 6. Implement the Solution
+
+## Using K-Means
+
+```{r}
+# Normalizing the dataset so that no particular attribute 
+# has more impact on clustering algorithm than others.
+# ---
+# 
+normalize <- function(x){
+  return ((x-min(x)) / (max(x)-min(x)))
+}
+final2 <- final
+
+# normalising first 10 numerical columns
+
+final2$administrative <- normalize(final2$administrative)
+final2$a_duration <- normalize(final2$a_duration)
+final2$informational <- normalize(final2$informational)
+final2$i_duration <- normalize(final2$i_duration)
+final2$productrelated <- normalize(final2$productrelated)
+final2$p_duration <- normalize(final2$p_duration)
+final2$bouncerates <- normalize(final2$bouncerates)
+final2$exitrates <- normalize(final2$exitrates)
+final2$pagevalues <- normalize(final2$pagevalues)
+final2$specialday <- normalize(final2$specialday)
+```
+
+
+```{r}
+
+# Obtaining optimal nearest neighbours using elbow method
+
+pacman :: p_load(factoextra) # loading necessary library
+
+
+fviz_nbclust(final2[,1:10], kmeans, method = "wss") +
+    geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+```
+
+```{r}
+# However, we already know our class has two clusters ( True or False for Revenue) 
+# Applying the K-means clustering algorithm with no. of centroids(k)=2 and removing the label column revenue
+
+result <- kmeans(final2[,1:10],2) 
+```
+
+
+```{r}
+# Previewing the no. of records in each cluster
+
+result$size 
+```
+```{r}
+# Getting the value of cluster center datapoint value(2 centers for k=2)
+
+result$centers 
+```
+```{r}
+# Getting the class 
+
+final.class <- final[,18]
+```
+
+```{r}
+# Setting plot options
+# par(mfrow = c(2,2), mar = c(5,4,2,2))
+
+# Plotting to see how data points have been distributed in clusters using fviz_cluster
+
+fviz_cluster(result, data = final2[, 1:10],
+             palette = c("#f20b34", "#4cf886"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
+
+```{r}
+# Getting the accuracy using a confusion matrix by comparing result cluster with our class
+
+table(result$cluster, final.class)
+```
+# Strengths and Limitations
+```{r}
+# K means is preferred or performs well when we have an idea of the number of clusters/centroids(k) we should have.In our case we already know our class as revenue which is true or false, hence k value of 2
+
+# Limitations 
+# this algorithm only accepts numerical variables/features hence some important categorical features were not used in the clustering
+# This algorithm cannot work with NA values, noise or outliers in the dataset. It requires a more normally distributed dataset or data without extreme outliers
+```
+
+# Using Hierarchichal Clustering
+
+
+```{r}
+# We note that the variables have a large different means and variances. 
+# This is explained by the fact that the variables are measured in different 
+# units
+
+# They must be standardized (scaled) to make them comparable such that 
+# they have mean zero and standard deviation one. 
+
+final3 <- scale(final[,1:10])
+```
+
+```{r}
+# Using the dist() function to compute the Euclidean distance between observations, 
+# and saving it in variable distance which will be the first argument in the following hclust() function dissimilarity matrix
+
+distance <- dist(final3, method = "euclidean")
+```
+
+```{r}
+# We then use hierarchical clustering using the Ward's method
+
+result.hc <- hclust(distance, method = "ward.D2" )
+```
+
+```{r}
+# Plotting the obtained dendrogram
+
+plot(result.hc, cex = 0.6, hang = -1)
+
+# The resulting dendogram shows too many clusters.
+```
+# Strengths and Limitations
+```{r}
+# Strengths
+# It is easier and faster to use for a smaller dataset
+
+# Limitations 
+# Since our dataset is large, hierarchical clustering is not the right fit since it creates too many clusters. Its not suited for large datasets especially when you have an idea of the size of clusters you want.
+# Its computationally expensive for very large datasets.
+
+```
+
+## 7. Challenge the Solution
+
+
+```{r}
+# We challenge the solution using DBSCAN algorithm to see if it performs better clustering
+
+# Loading necessary libraries
+pacman :: p_load(dbscan)
+
+# obtaining optimal nearest neighbours
+
+kNNdistplot(final[,1:10],k=2) 
+
+# shows optimal distance at approx 2000 for k value which we already know as 2 based on revenue class
+```
+```{r}
+# We want minimum 2 Cluster points with in a distance of eps(2000)
+# 
+
+result_db <- dbscan(final[,1:10],eps=2000,MinPts = 2, borderPoints = TRUE)
+result_db
+```
+
+```{r}
+# We also plot our clusters using hullplot()
+
+hullplot(final[,1:10],result_db$cluster)
+```
+## 8. Follow Up Questions/Summary
+```{r}
+# This dataset was not the right dataset to answer or provide a solution to the problem. This is because its an imbalanced dataset and its too imbalanced to the extent we cannot downsample the majority class since the minority class is too small, hence that would reduce data for modelling.
+
+# We therefore require a new dataset that has a roughly equal measure of the revenue outcome.
+```
+
